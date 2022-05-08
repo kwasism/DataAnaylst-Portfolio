@@ -1,0 +1,274 @@
+######################################################################################################################
+
+#STEP #1:Install Require Packages and Set directory to load files easily
+
+######################################################################################################################
+
+library(tidyverse) #helps wrangle data
+library(lubridate) #helps wrangle data attributes
+library(ggplot2) #helps to visualize data
+#Displays Current working directory(folder)
+getwd()
+
+#Set the working directory to make calls
+setwd("/Users/k/Documents")
+
+######################################################################################################################
+
+#STEP #2: Import the data
+
+######################################################################################################################
+m5_2021 <- read_csv("202105-divvy-tripdata.csv")
+m6_2021 <- read_csv("202106-divvy-tripdata.csv")
+m7_2021 <- read_csv("202107-divvy-tripdata.csv")
+m8_2021 <- read_csv("202108-divvy-tripdata.csv")
+m9_2021 <- read_csv("202109-divvy-tripdata.csv")
+m10_2021 <- read_csv("202110-divvy-tripdata.csv")
+m11_2021 <- read_csv("202111-divvy-tripdata.csv")
+m12_2021 <- read_csv("202112-divvy-tripdata.csv")
+m4_2021 <- read_csv("202104-divvy-tripdata.csv")
+m1_2022 <- read_csv("202201-divvy-tripdata.csv")
+m2_2022 <- read_csv("202202-divvy-tripdata.csv")
+m3_2022 <- read_csv("202203-divvy-tripdata.csv")
+######################################################################################################################
+
+# STEP-3: (Clean Data) Drop columns I will not use during this analysis, dropped due to slow laptop processing power
+
+######################################################################################################################
+
+m4_2021 <- m4_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m3_2022 <- m3_2022 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m2_2022 <- m2_2022 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m1_2022 <- m1_2022 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m12_2021 <- m12_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m11_2021 <- m11_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m10_2021 <- m10_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m9_2021 <- m9_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m8_2021 <- m8_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m7_2021 <- m7_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m6_2021 <- m6_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+m5_2021 <- m5_2021 %>% select(-c(start_station_id, end_station_name, end_station_id))
+
+######################################################################################################################
+
+# STEP-4: Modify and process data for analysis, add new columns to tobels (Day of Week and Ride Length in Secs & Mins)
+
+######################################################################################################################
+
+#Combine tables to create a draft master table.
+total_trips <- bind_rows(m5_2021,m6_2021, m7_2021, m8_2021, m9_2021, m10_2021, m11_2021, m12_2021, m1_2022, m2_2022, m3_2022, m4_2021)
+
+#Results in either "member" or "casual"
+table(total_trips$member_casual)
+
+#Results in either "classic_bike", "docked_bike", or "electric_bike"
+table(total_trips$rideable_type)
+
+#Add data
+total_trips$date <- as.Date(total_trips$started_at)#add a date started column
+total_trips$month <- format(as.Date(total_trips$date), "%m")#add a month column
+total_trips$day <- format(as.Date(total_trips$date), "%d")#add a day column
+total_trips$year <- format(as.Date(total_trips$date), "%Y")#add a year column
+total_trips$day_of_week <- format(as.Date(total_trips$date), "%A")#add a day of week column
+total_trips$time <- format(total_trips$started_at, format = "%H:%M")  #add a time started column
+total_trips$time <- as.POSIXct(total_trips$time, format = "%H:%M")  #change time format for the time column to hour/mins
+
+#Create column ride_length calculating the total time elasped per trip
+total_trips$ride_length <- difftime(total_trips$ended_at, total_trips$started_at)
+total_trips$ride_length_mins <- difftime(total_trips$ended_at, total_trips$started_at)/60
+
+
+#Change ride length to a numeric value
+total_trips$ride_length <- as.numeric(total_trips$ride_length)
+total_trips$ride_length_mins <- as.duration(total_trips$ride_length_mins, 'minutes')
+
+######################################################################################################################
+
+# STEP-6: Further Clean Data for analysis
+
+######################################################################################################################
+#Put data in order
+
+total_trips$day_of_week <- ordered(total_trips$day_of_week, levels=c("Monday", "Tuesday", "Wednesday", "Thursday",
+                                                           "Friday", "Saturday", "Sunday"))
+
+#Remove docked bikes from total_trips table bc docked bikes are bikes are not used and could cause inaccuracies
+#during analysis.  In addition remove rides that came up with negative values for time.
+total_trips_v2 <- total_trips[!(total_trips$rideable_type == "docked_bike" | total_trips$ride_length<0),]
+
+#Remove rides that were to long - rides will be limited to 1 day or 1440 minutes
+data.frame(total_trips_v2 <- total_trips_v2[!total_trips_v2$ride_length>1440,] )
+
+#Remove any missing, Null, & N/A data from dataset
+drop_na(total_trips_v2)
+
+
+#Remove any duplicates
+data.frame(total_trip_v3<- distinct(total_trips_v2))
+
+drop_na(total_trip_v3)
+
+remove_empty(total_trip_v3)
+
+remove_missing(total_trip_v3)
+######################################################################################################################
+
+# STEP-6: Analysis
+
+######################################################################################################################
+#Count the total number of casual and member riders
+table(total_trip_v3$member_casual)
+
+#Average ride of memebr type in Minutes
+total_trip_v3 %>%
+  group_by(member_casual) %>%
+  summarise(total_rides = n() ,average_duration_mins = mean(ride_length_mins))
+
+#Average ride of member type in Seconds
+total_trip_v3 %>%
+  group_by(member_casual) %>%
+  summarise(total_rides = n() ,average_duration = mean(ride_length))
+
+#Ride types used by member type
+total_trip_v3 %>%
+  group_by(member_casual, rideable_type) %>%
+  summarise(num.rideable_type = n())
+
+#Days of the week bikes are used by member type
+total_trip_v3 %>%
+  arrange(desc(member_casual), decreasing= FALSE) %>%
+  group_by(member_casual,day_of_week) %>%
+  summarise(total_riders = n())
+
+
+#Create table for analysis of top 10 starting stations, put the results for the number of trips
+#to each station by member type
+start_stations<-total_trip_v3 %>%
+    group_by(member_casual,start_station_name) %>%
+    summarise(total = n()) %>%
+    arrange(desc(total), decreasing= TRUE) %>%
+    drop_na() %>%
+    slice(1:20)
+
+#Check if table works for analysis
+view(start_stations)
+
+#Top 10 Starting Stations for Casual Riders
+start_stations1 <- filter(start_stations, member_casual=='casual') %>%
+  arrange(desc(total)) %>%
+  slice (1:10)
+#Top 10 Starting Stations for Memeber Riders
+start_stations2 <- filter(start_stations, member_casual=='member') %>%
+  arrange(desc(total)) %>%
+  slice (1:10)
+
+#Combine the data of the two created filtered tables for later analysis using a union
+start_stations_v2 <- union_all(start_stations1,start_stations2)
+
+#Check to see if union of table data was successful
+print(start_stations_v2)
+
+#Looking at demand for bikes over a 24 hour period, per hour, by member type
+total_trip_v3%>%     
+  group_by(member_casual, time) %>%
+  summarise(total_rides = n())
+######################################################################################################################
+
+# STEP-7: Create Visual Graphics for Analysis
+
+######################################################################################################################
+#Average ride of memebr type in Seconds
+
+total_trip_v3 %>%
+  group_by(member_casual) %>%
+  summarise(total_rides = n() ,average_duration_secs = mean(ride_length)) %>%
+  ggplot(aes(x=average_duration_secs, y = format(total_rides, scientific = FALSE), fill = member_casual))+
+  geom_col(position = "dodge") +
+  labs (x="Average Ride Length(Secs)", y = "Total Number of Rides", title = "Average Ride Length by Customer Type",
+        subtitle = "April 2021 - March 2022", fill = "Membership Type") +
+  theme(axis.text.x = element_text(angle = 0))
+
+
+
+#Average ride of memebr type in Minutes
+
+total_trip_v3 %>%
+  group_by(member_casual) %>%
+  summarise(total_rides = n() ,average_duration_mins = mean(ride_length_mins)) %>%
+ggplot(aes(x=average_duration_mins, y = format(total_rides, scientific = FALSE), fill = member_casual))+
+  geom_col(position = "dodge") +
+  labs (x="Average Ride Length(min)", y = "Total Number of Rides", title = "Average Ride Length by Customer Type",
+        subtitle = "April 2021 - March 2022", fill = "Membership Type") +
+        theme(axis.text.x = element_text(angle = 0))
+
+
+
+#Number of Rides by Days of the week bikes are used by member type
+
+total_trip_v3 %>%
+  group_by(member_casual,day_of_week) %>%
+  summarise(total_riders = n())%>%
+ggplot(aes(x=day_of_week, y = format(total_riders, scientific = FALSE), fill = member_casual))+
+  geom_col(position = "dodge") + labs (x="Day of Week", y="Total Number of Riders",
+                                       title = "Average Ride Length by Customer Type and Day of Week",
+                                       subtitle = "April 2021 - March 2022", fill = "Membership Type")
+
+
+
+#Top 10 Starting Stations for Casual Riders
+ggplot(data = start_stations1, aes(x = start_station_name, y = total, fill = member_casual)) +
+  geom_col(position = "dodge")+
+  theme(axis.text.x = element_text(angle = 285))+
+  labs(x= 'Starting Station Name', y='Total Number of Riders', title='Top 10 Starting Stations for Casual Riders',
+       subtitle = "April 2021 - March 2022", fill = 'Membership Type')
+
+
+
+#Top 10 Starting Stations for Memeber Riders
+ggplot(data = start_stations2, aes(x = start_station_name, y = total, fill = member_casual))+
+  geom_col(position = "dodge")+
+  theme(axis.text.x = element_text(angle = 285))+
+  labs(x= 'Starting Station Name', y='Total Number of Riders', title='Top 10 Starting Stations for Memeber Riders',
+       subtitle = "April 2021 - March 2022", fill = 'Membership Type')
+
+
+
+#Top 10 Starting Stations for Memeber vs. Casual Riders
+ggplot(data = start_stations_v2, aes(x = start_station_name, y= total, fill = member_casual)) +
+  geom_col(position = "dodge")+
+  theme(axis.text.x = element_text(angle = 300))+
+  labs(x= 'Starting Station Name', y='Total Number of Riders', title='Top 10 Starting Stations for Memeber vs. Casual Riders',
+       subtitle = "April 2021 - March 2022", fill = 'Membership Type')
+
+
+
+#Create Bar Chart for Type of Bikes Rented by Member Type
+ggplot(data = total_trip_v3, aes(x = rideable_type, fill = member_casual)) +
+  geom_bar(position = "dodge") +
+  labs(x= 'Bike Types', y='Number of Rentals', title='Rider Type Bike Type Usage',
+  subtitle = "April 2021 - March 2022", fill = 'Membership Type')
+
+
+
+#Create Line Graph Looking at demand for bikes over a 24 hour period, per hour, by member type,
+total_trip_v3%>%     
+  group_by(member_casual, time) %>%
+  summarise(total_rides = n()) %>%
+ggplot(aes(x=time, y=total_rides, color = member_casual, group = member_casual)) +
+  geom_line() + scale_x_datetime(date_breaks = "1 hour", date_labels = "%H:%M", expand = c(0,0)) +
+  theme(axis.text.x = element_text(angle = 300)) +
+  labs(title ="Demand Throughout the Day", subtitle = "April 2021 - March 2022",
+  x = "Time", y = "Total Number of Rides")
+
+
+######################################################################################################################
+
+# STEP-8: Save Charts and Tables Created to System
+
+######################################################################################################################
+
+#Save Tables to System
+write.csv(start_stations,"/Users/k/Documents/cyclistic_start_stations.csv", row.names = FALSE)
+write.csv(total_trip_v3,"/Users/k/Documents/cyclistic_total_trip_v3.csv", row.names = FALSE)
+write.csv(total_trips_v2,"/Users/k/Documents/cyclistic_total_trips_v2.csv", row.names = FALSE)
+write.csv(total_trips,"/Users/k/Documents/cyclistic_total_trips.csv", row.names = FALSE)
